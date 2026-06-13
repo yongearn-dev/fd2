@@ -50,29 +50,15 @@
     log("Page loaded. js-dos: " + (window.Dos ? "found" : "NOT FOUND"));
 
     if (window.Dos) {
-      var ci = Dos(document.getElementById("jsdos"), {
-        wdosboxUrl: "https://v8.js-dos.com/latest/wdosbox.js"
-      });
-
-      ci.ready(function (fs, main) {
-        log("DOS ready, fetching game.zip...");
-        fetch("game.zip")
-          .then(function (response) {
-            log("game.zip fetched, status: " + response.status);
-            return response.arrayBuffer();
-          })
-          .then(function (buffer) {
-            log("Extracting bundle...");
-            return fs.extract(buffer);
-          })
-          .then(function () {
-            log("Bundle extracted. Starting FD2.EXE...");
-            statusEl.style.display = "none";
-            main(["-c", "mount c .", "-c", "c:", "-c", "FD2.EXE"]);
-          })
-          .catch(function (err) {
-            log("ERROR: " + err);
-          });
+      Dos(document.getElementById("jsdos"), {
+        url: "game.zip",
+        autoStart: true,
+        kiosk: false
+      }).then(function (ci) {
+        log("js-dos started OK");
+        statusEl.style.display = "none";
+      }).catch(function (err) {
+        log("ERROR: " + err);
       });
     } else {
       log("Dos() function not available - js-dos failed to load.");
