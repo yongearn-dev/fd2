@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>神奇字母 FD2</title>
+<script src="https://v8.js-dos.com/latest/js-dos.js"></script>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #000;
+    width: 100%; height: 100%;
+    overflow: hidden;
+  }
+  #jsdos {
+    width: 100vw;
+    height: 100vh;
+  }
+</style>
+</head>
+<body>
+  <div id="jsdos"></div>
+  <script>
+    Dos(document.getElementById("jsdos"), {
+      url: "game.zip",
+      autoStart: true,
+      kiosk: false,
+      onEvent: (event, ci) => {
+        if (event === "ci-ready") {
+          ci.fs.then(fs => {
+            // 自動執行 FD2.EXE
+          });
+          ci.run("FD2.EXE");
+        }
+      }
+    });
+  </script>
+</body>
+</html>
