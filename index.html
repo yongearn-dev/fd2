@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>神奇字母 FD2</title>
+<link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
 <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
 <style>
   html, body {
@@ -15,25 +16,67 @@
   #jsdos {
     width: 100vw;
     height: 100vh;
+    position: relative;
+  }
+  #status {
+    position: fixed;
+    top: 0; left: 0;
+    color: #0f0;
+    background: rgba(0,0,0,0.85);
+    font-family: monospace;
+    font-size: 13px;
+    padding: 8px;
+    z-index: 9999;
+    white-space: pre-wrap;
+    max-width: 100vw;
+    pointer-events: none;
   }
 </style>
 </head>
 <body>
+  <div id="status">載入中 / Loading...</div>
   <div id="jsdos"></div>
   <script>
-    Dos(document.getElementById("jsdos"), {
-      url: "game.zip",
-      autoStart: true,
-      kiosk: false,
-      onEvent: (event, ci) => {
-        if (event === "ci-ready") {
-          ci.fs.then(fs => {
-            // 自動執行 FD2.EXE
-          });
-          ci.run("FD2.EXE");
-        }
-      }
+    var statusEl = document.getElementById("status");
+    function log(msg) {
+      console.log(msg);
+      statusEl.textContent += "\n" + msg;
+    }
+
+    window.addEventListener("error", function(e) {
+      log("JS ERROR: " + e.message);
     });
+
+    log("Page loaded. js-dos: " + (window.Dos ? "found" : "NOT FOUND"));
+
+    if (window.Dos) {
+      var ci = Dos(document.getElementById("jsdos"), {
+        wdosboxUrl: "https://v8.js-dos.com/latest/wdosbox.js"
+      });
+
+      ci.ready(function (fs, main) {
+        log("DOS ready, fetching game.zip...");
+        fetch("game.zip")
+          .then(function (response) {
+            log("game.zip fetched, status: " + response.status);
+            return response.arrayBuffer();
+          })
+          .then(function (buffer) {
+            log("Extracting bundle...");
+            return fs.extract(buffer);
+          })
+          .then(function () {
+            log("Bundle extracted. Starting FD2.EXE...");
+            statusEl.style.display = "none";
+            main(["-c", "mount c .", "-c", "c:", "-c", "FD2.EXE"]);
+          })
+          .catch(function (err) {
+            log("ERROR: " + err);
+          });
+      });
+    } else {
+      log("Dos() function not available - js-dos failed to load.");
+    }
   </script>
 </body>
 </html>
