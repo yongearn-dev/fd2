@@ -53,6 +53,15 @@
   #guide-btn:active {
     background: rgba(30, 80, 160, 1);
   }
+
+  /* 放大虛擬鍵盤按鈕 約30% */
+  .simple-keyboard,
+  [class*="simple-keyboard"],
+  [class*="soft-keyboard"],
+  [class*="SoftKeyboard"] {
+    transform: scale(1.3);
+    transform-origin: bottom center;
+  }
 </style>
 </head>
 <body>
@@ -61,13 +70,11 @@
   <div id="jsdos"></div>
   <script>
     var statusEl = document.getElementById("status");
-    var hasError = false;
     function log(msg) {
       console.log(msg);
       statusEl.textContent += "\n" + msg;
     }
     function showError(msg) {
-      hasError = true;
       statusEl.style.display = "block";
       log(msg);
     }
@@ -83,20 +90,27 @@
         kiosk: false,
 
         // ===== 自訂虛擬鍵盤 =====
-        // 第一頁(遊戲操作): 左邊方向鍵 + Backspace/Enter, 右邊 Esc + 切換頁
-        // 第二頁(功能鍵): F1-F12, 下面 Shift/Ctrl/Alt
+        // 第一頁(遊戲操作):
+        //   左: Esc / 更多(切換頁)
+        //   中: 方向鍵 (上在下的上面, 置中)
+        //   右: Enter / Del(Backspace)
+        // 第二頁(功能鍵): F1-F12, 下面 Shift/Ctrl/Alt + 更多
         softKeyboardLayout: [
           [
             // 左邊群組
             [
-              "{bksp} {enter}",
+              "{esc}",
+              "{layout}"
+            ],
+            // 中間群組 (方向鍵)
+            [
               "{up}",
               "{left} {down} {right}"
             ],
             // 右邊群組
             [
-              "{esc}",
-              "{layout}"
+              "{enter}",
+              "{bksp}"
             ]
           ],
           [
@@ -104,10 +118,25 @@
             [
               "{f1} {f2} {f3} {f4} {f5} {f6}",
               "{f7} {f8} {f9} {f10} {f11} {f12}",
-              "{shift} {ctrl} {alt}",
-              "{layout}"
+              "{shift} {ctrl} {alt} {layout}"
             ]
           ]
+        ],
+
+        softKeyboardSymbols: [
+          {
+            "{esc}": "Esc",
+            "{layout}": "更多",
+            "{enter}": "Enter",
+            "{bksp}": "Del",
+            "{up}": "↑",
+            "{down}": "↓",
+            "{left}": "←",
+            "{right}": "→",
+            "{shift}": "Shift",
+            "{ctrl}": "Ctrl",
+            "{alt}": "Alt"
+          }
         ],
 
         onEvent: function(event, ci) {
