@@ -47,19 +47,28 @@
       log("JS ERROR: " + e.message);
     });
 
-    log("Page loaded. js-dos: " + (window.Dos ? "found" : "NOT FOUND"));
+    log("Page loaded. js-dos: " + (window.Dos ? "found" : "NOT FOUND") + " typeof=" + typeof window.Dos);
 
     if (window.Dos) {
-      Dos(document.getElementById("jsdos"), {
+      var result = Dos(document.getElementById("jsdos"), {
         url: "game.zip",
         autoStart: true,
-        kiosk: false
-      }).then(function (ci) {
-        log("js-dos started OK");
-        statusEl.style.display = "none";
-      }).catch(function (err) {
-        log("ERROR: " + err);
+        kiosk: false,
+        onEvent: function(event, ci) {
+          log("Event: " + event);
+          if (event === "emu-ready") {
+            log("Emulator ready");
+          }
+          if (event === "bnd-play") {
+            log("Bundle playing");
+            statusEl.style.display = "none";
+          }
+          if (event === "ci-error") {
+            log("CI ERROR");
+          }
+        }
       });
+      log("Dos() returned, type=" + typeof result);
     } else {
       log("Dos() function not available - js-dos failed to load.");
     }
