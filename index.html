@@ -93,6 +93,8 @@
     // 模擬輸入字串 + Enter 去執行FD2.EXE
     function charToKeyCode(ch) {
       if (ch === '.') return 190;
+      if (ch === ':') return 186;
+      if (ch === ' ') return 32;
       if (ch >= '0' && ch <= '9') return 48 + (ch.charCodeAt(0) - 48);
       if (ch >= 'A' && ch <= 'Z') return ch.charCodeAt(0);
       return ch.charCodeAt(0);
@@ -153,11 +155,22 @@
             var idx = 0;
             function writeNext() {
               if (idx >= GAME_FILES.length) {
-                log("全部檔案已載入完成! 啟動 FD2.EXE ...");
+                log("全部檔案已載入完成! 執行 mount...");
+                // 檔案寫完之後先 mount, 確保DOS見到所有檔案
                 setTimeout(function() {
-                  typeString(ci, "FD2.EXE\r", function() {
-                    log("已送出啟動指令");
-                    setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
+                  typeString(ci, "mount c .\r", function() {
+                    log("mount完成, 切換C:...");
+                    setTimeout(function() {
+                      typeString(ci, "c:\r", function() {
+                        log("執行 FD2.EXE ...");
+                        setTimeout(function() {
+                          typeString(ci, "FD2.EXE\r", function() {
+                            log("已送出啟動指令");
+                            setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
+                          });
+                        }, 600);
+                      });
+                    }, 1200);
                   });
                 }, 500);
                 return;
