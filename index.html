@@ -24,15 +24,14 @@
     color: #0f0;
     background: rgba(0,0,0,0.85);
     font-family: monospace;
-    font-size: 12px;
+    font-size: 13px;
     padding: 8px;
     z-index: 9999;
     white-space: pre-wrap;
     max-width: 100vw;
-    max-height: 50vh;
+    max-height: 60vh;
     overflow: auto;
     pointer-events: none;
-    display: none; /* 只在有錯誤時顯示 */
   }
   /* 攻略按鈕 */
   #guide-btn {
@@ -74,47 +73,61 @@
       console.log(msg);
       statusEl.textContent += "\n" + msg;
     }
-    function showError(msg) {
-      statusEl.style.display = "block";
-      log(msg);
-    }
 
     window.addEventListener("error", function(e) {
-      showError("JS ERROR: " + e.message);
+      log("JS ERROR: " + e.message);
     });
+
+    // === 全部遊戲檔案清單 (個別檔案,放在repo根目錄) ===
+    var GAME_FILES = [
+      "ADLIB.MDI","ADLIBG.MDI","ADRV688.DIG","AILDRVR.LST","ANI.DAT","BG.DAT",
+      "DATO.DAT","DIG.INI","FD2.EXE","FD2.SAV","FD2.TMP","FDFIELD.DAT",
+      "FDICON.B24","FDMUS.DAT","FDOTHER.DAT","FDSHAP.DAT","FDTXT.DAT","FIGANI.DAT",
+      "JAMMER.DIG","MDI.INI","MPU401.MDI","MT32MPU.MDI","NULL.MDI","OPL3.MDI",
+      "PAS.MDI","PASPLUS.MDI","PCSPKR.MDI","PROAUDIO.DIG","RAP10.DIG","SAMPLE.AD",
+      "SAMPLE.BNK","SAMPLE.OPL","SB16.DIG","SBAWE32.MDI","SBLASTER.DIG","SBLASTER.MDI",
+      "SBPRO.DIG","SBPRO1.MDI","SBPRO2.MDI","SETSOUND.EXE","SNDSCAPE.DIG","SNDSCAPE.MDI",
+      "TAI.DAT","TANDY.MDI","TITLE.DAT","ULTRA.DIG","ULTRA.MDI"
+    ];
+
+    // 模擬輸入字串 + Enter 去執行FD2.EXE
+    function charToKeyCode(ch) {
+      if (ch === '.') return 190;
+      if (ch >= '0' && ch <= '9') return 48 + (ch.charCodeAt(0) - 48);
+      if (ch >= 'A' && ch <= 'Z') return ch.charCodeAt(0);
+      return ch.charCodeAt(0);
+    }
+
+    function typeString(ci, str, cb) {
+      var i = 0;
+      function step() {
+        if (i >= str.length) { cb(); return; }
+        var ch = str[i];
+        if (ch === '\r' || ch === '\n') {
+          ci.simulateKeyPress(13); // Enter
+        } else {
+          ci.simulateKeyPress(charToKeyCode(ch.toUpperCase()));
+        }
+        i++;
+        setTimeout(step, 120);
+      }
+      step();
+    }
 
     if (window.Dos) {
       Dos(document.getElementById("jsdos"), {
-        url: "game.zip",
+        url: "base.zip",
         autoStart: true,
         kiosk: false,
 
         // ===== 自訂虛擬鍵盤 =====
-        // 第一頁(遊戲操作):
-        //   左: Esc / 更多(切換頁)
-        //   中: 方向鍵 (上在下的上面, 置中)
-        //   右: Enter / Del(Backspace)
-        // 第二頁(功能鍵): F1-F12, 下面 Shift/Ctrl/Alt + 更多
         softKeyboardLayout: [
           [
-            // 左邊群組
-            [
-              "{esc}",
-              "{layout}"
-            ],
-            // 中間群組 (方向鍵)
-            [
-              "{up}",
-              "{left} {down} {right}"
-            ],
-            // 右邊群組
-            [
-              "{enter}",
-              "{bksp}"
-            ]
+            [ "{esc}", "{layout}" ],
+            [ "{up}", "{left} {down} {right}" ],
+            [ "{enter}", "{bksp}" ]
           ],
           [
-            // 第二頁: 功能鍵
             [
               "{f1} {f2} {f3} {f4} {f5} {f6}",
               "{f7} {f8} {f9} {f10} {f11} {f12}",
@@ -122,35 +135,63 @@
             ]
           ]
         ],
-
         softKeyboardSymbols: [
           {
-            "{esc}": "Esc",
-            "{layout}": "更多",
-            "{enter}": "Enter",
-            "{bksp}": "Del",
-            "{up}": "↑",
-            "{down}": "↓",
-            "{left}": "←",
-            "{right}": "→",
-            "{shift}": "Shift",
-            "{ctrl}": "Ctrl",
-            "{alt}": "Alt"
+            "{esc}": "Esc", "{layout}": "更多", "{enter}": "Enter", "{bksp}": "Del",
+            "{up}": "↑", "{down}": "↓", "{left}": "←", "{right}": "→",
+            "{shift}": "Shift", "{ctrl}": "Ctrl", "{alt}": "Alt"
           }
         ],
 
         onEvent: function(event, ci) {
           log("Event: " + event);
-          if (event === "bnd-play") {
-            statusEl.style.display = "none";
+
+          if (event === "ci-ready") {
+            log("DOS ready. 開始載入遊戲檔案 (0/" + GAME_FILES.length + ")...");
+
+            // 逐個fetch並寫入檔案系統 (順序執行)
+            var idx = 0;
+            function writeNext() {
+              if (idx >= GAME_FILES.length) {
+                log("全部檔案已載入完成! 啟動 FD2.EXE ...");
+                setTimeout(function() {
+                  typeString(ci, "FD2.EXE\r", function() {
+                    log("已送出啟動指令");
+                    setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
+                  });
+                }, 500);
+                return;
+              }
+              var fname = GAME_FILES[idx];
+              fetch(fname + "?v=" + Date.now())
+                .then(function(resp) {
+                  if (!resp.ok) throw new Error(fname + " HTTP " + resp.status);
+                  return resp.arrayBuffer();
+                })
+                .then(function(buf) {
+                  return ci.fsWriteFile(fname, new Uint8Array(buf));
+                })
+                .then(function() {
+                  idx++;
+                  if (idx % 5 === 0 || idx === GAME_FILES.length) {
+                    log("載入進度: " + idx + "/" + GAME_FILES.length + " (" + fname + ")");
+                  }
+                  writeNext();
+                })
+                .catch(function(err) {
+                  log("ERROR loading " + fname + ": " + err);
+                });
+            }
+            writeNext();
           }
+
           if (event === "ci-error") {
-            showError("CI ERROR");
+            log("CI ERROR");
           }
         }
       });
     } else {
-      showError("Dos() function not available - js-dos failed to load.");
+      log("Dos() function not available - js-dos failed to load.");
     }
   </script>
 </body>
