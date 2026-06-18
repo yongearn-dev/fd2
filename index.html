@@ -7,122 +7,101 @@
 <link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
 <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
 <style>
-  html, body {
-    margin: 0; padding: 0;
-    background: #000;
-    width: 100%; height: 100%;
-    overflow: hidden;
-  }
-  #jsdos {
-    width: 100vw;
-    height: 100vh;
-    position: relative;
-  }
+  html, body { margin:0; padding:0; background:#000; width:100%; height:100%; overflow:hidden; }
+  #jsdos { width:100vw; height:100vh; position:relative; }
   #status {
-    position: fixed;
-    top: 0; left: 0;
-    color: #0f0;
-    background: rgba(0,0,0,0.85);
-    font-family: monospace;
-    font-size: 13px;
-    padding: 8px;
-    z-index: 9999;
-    white-space: pre-wrap;
-    max-width: 100vw;
-    max-height: 60vh;
-    overflow: auto;
-    pointer-events: none;
+    position:fixed; top:0; left:0; color:#0f0;
+    background:rgba(0,0,0,0.85); font-family:monospace; font-size:12px;
+    padding:8px; z-index:9999; white-space:pre-wrap;
+    max-width:100vw; max-height:50vh; overflow:auto; pointer-events:none;
   }
-  /* 攻略按鈕 */
   #guide-btn {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 9998;
-    background: rgba(30, 80, 160, 0.85);
-    color: #fff;
-    font-family: -apple-system, sans-serif;
-    font-size: 14px;
-    padding: 8px 14px;
-    border-radius: 20px;
-    text-decoration: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    -webkit-tap-highlight-color: transparent;
+    position:fixed; top:10px; right:10px; z-index:9998;
+    background:rgba(30,80,160,0.85); color:#fff;
+    font-family:-apple-system,sans-serif; font-size:14px;
+    padding:8px 14px; border-radius:20px; text-decoration:none;
+    box-shadow:0 2px 6px rgba(0,0,0,0.4); -webkit-tap-highlight-color:transparent;
   }
-  #guide-btn:active {
-    background: rgba(30, 80, 160, 1);
-  }
-
-  /* 放大虛擬鍵盤按鈕 約30% */
-  .simple-keyboard,
-  [class*="simple-keyboard"],
-  [class*="soft-keyboard"],
-  [class*="SoftKeyboard"] {
-    transform: scale(1.3);
-    transform-origin: bottom center;
+  #guide-btn:active { background:rgba(30,80,160,1); }
+  #save-toast {
+    position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+    background:rgba(0,120,0,0.9); color:#fff; padding:8px 20px;
+    border-radius:20px; font-family:monospace; font-size:13px;
+    z-index:9997; display:none; pointer-events:none;
   }
 </style>
 </head>
 <body>
   <div id="status">載入中 / Loading...</div>
   <a id="guide-btn" href="https://chiuinan.github.io/game/game/intro/ch/c31/fd2/index.htm" target="_blank" rel="noopener">📖 攻略</a>
+  <div id="save-toast">💾 進度已自動儲存</div>
   <div id="jsdos"></div>
   <script>
     var statusEl = document.getElementById("status");
-    function log(msg) {
-      console.log(msg);
-      statusEl.textContent += "\n" + msg;
+    var toastEl  = document.getElementById("save-toast");
+    var globalCi = null;
+
+    function log(msg) { console.log(msg); statusEl.textContent += "\n" + msg; }
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.display = "block";
+      setTimeout(function(){ toastEl.style.display = "none"; }, 2500);
     }
 
-    window.addEventListener("error", function(e) {
-      log("JS ERROR: " + e.message);
-    });
+    window.addEventListener("error", function(e){ log("JS ERROR: " + e.message); });
 
-    // === 全部遊戲檔案清單 (個別檔案,放在repo根目錄) ===
-    var GAME_FILES = [
-      "ADLIB.MDI","ADLIBG.MDI","ADRV688.DIG","AILDRVR.LST","ANI.DAT","BG.DAT",
-      "DATO.DAT","DIG.INI","FD2.EXE","FD2.SAV","FD2.TMP","FDFIELD.DAT",
-      "FDICON.B24","FDMUS.DAT","FDOTHER.DAT","FDSHAP.DAT","FDTXT.DAT","FIGANI.DAT",
-      "JAMMER.DIG","MDI.INI","MPU401.MDI","MT32MPU.MDI","NULL.MDI","OPL3.MDI",
-      "PAS.MDI","PASPLUS.MDI","PCSPKR.MDI","PROAUDIO.DIG","RAP10.DIG","SAMPLE.AD",
-      "SAMPLE.BNK","SAMPLE.OPL","SB16.DIG","SBAWE32.MDI","SBLASTER.DIG","SBLASTER.MDI",
-      "SBPRO.DIG","SBPRO1.MDI","SBPRO2.MDI","SETSOUND.EXE","SNDSCAPE.DIG","SNDSCAPE.MDI",
-      "TAI.DAT","TANDY.MDI","TITLE.DAT","ULTRA.DIG","ULTRA.MDI"
-    ];
+    // ===== IndexedDB save/load helper =====
+    var DB_NAME  = "fd2_saves";
+    var DB_STORE = "files";
+    var SAVE_KEY = "FD2.SAV";
 
-    // 模擬輸入字串 + Enter 去執行FD2.EXE
-    function charToKeyCode(ch) {
-      if (ch === '.') return 190;
-      if (ch === ':') return 186;
-      if (ch === ' ') return 32;
-      if (ch >= '0' && ch <= '9') return 48 + (ch.charCodeAt(0) - 48);
-      if (ch >= 'A' && ch <= 'Z') return ch.charCodeAt(0);
-      return ch.charCodeAt(0);
+    function openDB(cb) {
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function(e) {
+        e.target.result.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = function(e) { cb(null, e.target.result); };
+      req.onerror   = function(e) { cb(e.target.error); };
     }
 
-    function typeString(ci, str, cb) {
-      var i = 0;
-      function step() {
-        if (i >= str.length) { cb(); return; }
-        var ch = str[i];
-        if (ch === '\r' || ch === '\n') {
-          ci.simulateKeyPress(13); // Enter
-        } else {
-          ci.simulateKeyPress(charToKeyCode(ch.toUpperCase()));
-        }
-        i++;
-        setTimeout(step, 120);
-      }
-      step();
+    function dbGet(key, cb) {
+      openDB(function(err, db) {
+        if (err) return cb(err);
+        var tx  = db.transaction(DB_STORE, "readonly");
+        var req = tx.objectStore(DB_STORE).get(key);
+        req.onsuccess = function(e) { cb(null, e.target.result); };
+        req.onerror   = function(e) { cb(e.target.error); };
+      });
     }
 
+    function dbSet(key, val, cb) {
+      openDB(function(err, db) {
+        if (err) return cb && cb(err);
+        var tx  = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put(val, key);
+        tx.oncomplete = function() { cb && cb(null); };
+        tx.onerror    = function(e){ cb && cb(e.target.error); };
+      });
+    }
+
+    // 從遊戲虛擬FS讀FD2.SAV並存入IndexedDB
+    function persistSave(ci, silent) {
+      ci.fsReadFile(SAVE_KEY).then(function(data) {
+        if (!data || data.length === 0) return;
+        dbSet(SAVE_KEY, data, function(err) {
+          if (!err && !silent) showToast("💾 進度已自動儲存");
+          if (!err) log("SAV saved to IndexedDB (" + data.length + " bytes)");
+        });
+      }).catch(function(e){ log("fsReadFile err: " + e); });
+    }
+
+    // ===== 啟動 js-dos =====
     if (window.Dos) {
       Dos(document.getElementById("jsdos"), {
-        url: "base.zip",
+        url: "game.zip",
         autoStart: true,
         kiosk: false,
 
-        // ===== 自訂虛擬鍵盤 =====
         softKeyboardLayout: [
           [
             [ "{esc}", "{layout}" ],
@@ -137,75 +116,51 @@
             ]
           ]
         ],
-        softKeyboardSymbols: [
-          {
-            "{esc}": "Esc", "{layout}": "更多", "{enter}": "Enter", "{bksp}": "Del",
-            "{up}": "↑", "{down}": "↓", "{left}": "←", "{right}": "→",
-            "{shift}": "Shift", "{ctrl}": "Ctrl", "{alt}": "Alt"
-          }
-        ],
+        softKeyboardSymbols: [{
+          "{esc}":"Esc", "{layout}":"更多", "{enter}":"Enter", "{bksp}":"Del",
+          "{up}":"↑", "{down}":"↓", "{left}":"←", "{right}":"→",
+          "{shift}":"Shift", "{ctrl}":"Ctrl", "{alt}":"Alt"
+        }],
 
         onEvent: function(event, ci) {
           log("Event: " + event);
 
           if (event === "ci-ready") {
-            log("DOS ready. 開始載入遊戲檔案 (0/" + GAME_FILES.length + ")...");
+            globalCi = ci;
 
-            // 逐個fetch並寫入檔案系統 (順序執行)
-            var idx = 0;
-            function writeNext() {
-              if (idx >= GAME_FILES.length) {
-                log("全部檔案已載入完成! 執行 mount...");
-                // 檔案寫完之後先 mount, 確保DOS見到所有檔案
-                setTimeout(function() {
-                  typeString(ci, "mount c .\r", function() {
-                    log("mount完成, 切換C:...");
-                    setTimeout(function() {
-                      typeString(ci, "c:\r", function() {
-                        log("執行 FD2.EXE ...");
-                        setTimeout(function() {
-                          typeString(ci, "FD2.EXE\r", function() {
-                            log("已送出啟動指令");
-                            setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
-                          });
-                        }, 600);
-                      });
-                    }, 1200);
-                  });
-                }, 500);
-                return;
+            // 嘗試從IndexedDB讀返存檔,覆蓋zip入面嘅舊SAV
+            dbGet(SAVE_KEY, function(err, savedData) {
+              if (!err && savedData && savedData.length > 0) {
+                log("找到IndexedDB存檔(" + savedData.length + "bytes),載入中...");
+                ci.fsWriteFile(SAVE_KEY, savedData).then(function() {
+                  log("✅ 已從IndexedDB恢復存檔");
+                }).catch(function(e){ log("fsWriteFile err: " + e); });
+              } else {
+                log("使用zip內建存檔(FD2.SAV)");
               }
-              var fname = GAME_FILES[idx];
-              fetch(fname + "?v=" + Date.now())
-                .then(function(resp) {
-                  if (!resp.ok) throw new Error(fname + " HTTP " + resp.status);
-                  return resp.arrayBuffer();
-                })
-                .then(function(buf) {
-                  return ci.fsWriteFile(fname, new Uint8Array(buf));
-                })
-                .then(function() {
-                  idx++;
-                  if (idx % 5 === 0 || idx === GAME_FILES.length) {
-                    log("載入進度: " + idx + "/" + GAME_FILES.length + " (" + fname + ")");
-                  }
-                  writeNext();
-                })
-                .catch(function(err) {
-                  log("ERROR loading " + fname + ": " + err);
-                });
-            }
-            writeNext();
+            });
           }
 
-          if (event === "ci-error") {
-            log("CI ERROR");
+          if (event === "bnd-play") {
+            statusEl.style.display = "none";
+            // 每60秒自動persist存檔
+            setInterval(function() {
+              if (globalCi) persistSave(globalCi, true);
+            }, 60000);
           }
+
+          if (event === "ci-error") { log("CI ERROR"); }
         }
       });
     } else {
-      log("Dos() function not available - js-dos failed to load.");
+      log("Dos() function not available.");
     }
+
+    // js-dos左側磁碟icon(ci.persist)仍然有效
+    // 額外:監聽頁面關閉,觸發最後一次儲存
+    window.addEventListener("beforeunload", function() {
+      if (globalCi) persistSave(globalCi, true);
+    });
   </script>
 </body>
 </html>
