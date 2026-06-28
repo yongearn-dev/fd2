@@ -6,6 +6,7 @@
 <title>炎龍騎士團2 (FD2)</title>
 <link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
 <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   html, body { margin:0; padding:0; background:#000; width:100%; height:100%; overflow:hidden; }
   #jsdos { width:100vw; height:100vh; position:relative; }
@@ -49,6 +50,29 @@
     }
 
     window.addEventListener("error", function(e){ log("JS ERROR: " + e.message); });
+
+    // 先驗證game.zip實際內容,確認唔係cache咗舊版
+    fetch("game.zip?verify=" + Date.now())
+      .then(function(resp){
+        log("game.zip HTTP " + resp.status + ", size=" + resp.headers.get("content-length") + " bytes");
+        return resp.arrayBuffer();
+      })
+      .then(function(buf){
+        log("實際下載size=" + buf.byteLength + " bytes");
+        // 用JSZip驗證.jsdos/dosbox.conf是否存在(若已載入JSZip)
+        if (window.JSZip) {
+          return JSZip.loadAsync(buf).then(function(zip){
+            var hasConf = !!zip.files[".jsdos/dosbox.conf"];
+            log(".jsdos/dosbox.conf 存在於下載的zip: " + hasConf);
+            if (hasConf) {
+              return zip.files[".jsdos/dosbox.conf"].async("string").then(function(txt){
+                log("conf內容: " + JSON.stringify(txt));
+              });
+            }
+          });
+        }
+      })
+      .catch(function(e){ log("驗證失敗: " + e); });
 
     // ===== IndexedDB save/load helper =====
     var DB_NAME  = "fd2_saves";
@@ -98,7 +122,7 @@
     // ===== 啟動 js-dos =====
     if (window.Dos) {
       Dos(document.getElementById("jsdos"), {
-        url: "game.zip",
+        url: "game.zip?nocache=" + Date.now(),
         autoStart: true,
         kiosk: false,
 
